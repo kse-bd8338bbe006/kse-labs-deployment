@@ -6,7 +6,7 @@ metadata:
 spec:
   generators:
     - git:
-        repoURL: https://github.com/TorinKS/kse-labs-deployment.git
+        repoURL: https://github.com/kse-bd8338bbe006/kse-labs-deployment.git
         revision: main
         directories:
           - path: services/*
@@ -16,7 +16,7 @@ spec:
     spec:
       project: services
       source:
-        repoURL: https://github.com/TorinKS/kse-labs-deployment.git
+        repoURL: https://github.com/kse-bd8338bbe006/kse-labs-deployment.git
         targetRevision: main
         path: '{{path}}'
       destination:
