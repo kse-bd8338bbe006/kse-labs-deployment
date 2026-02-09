@@ -363,6 +363,77 @@ git push
 # ArgoCD creates "infra-monitoring" Application
 ```
 
+## Private Container Registry (ghcr.io)
+
+When pulling images from a private GitHub Container Registry, the kubelet needs credentials to authenticate. This is separate from ArgoCD's git repository credentials.
+
+### How It Works
+
+```
+ArgoCD                              Kubelet
+  │                                   │
+  ├─ reads manifests from git         ├─ pulls container images from ghcr.io
+  │  (uses repo secret)               │  (uses imagePullSecret)
+  │                                   │
+  └─ applies Deployment to cluster    └─ needs docker-registry credentials
+```
+
+- **ArgoCD repo secret** — allows ArgoCD to read manifests from private git repos
+- **Image pull secret** — allows kubelet to pull images from private container registries
+
+These are two independent authentication mechanisms.
+
+### Step 1: Create the Image Pull Secret
+
+Create a `docker-registry` secret in the namespace where your workload runs. Use a GitHub PAT with `read:packages` scope (fine-grained) or `read:packages` (classic):
+
+```bash
+kubectl create secret docker-registry ghcr-pull-secret \
+  -n <namespace> \
+  --docker-server=ghcr.io \
+  --docker-username=x-access-token \
+  --docker-password='<GITHUB_PAT>'
+```
+
+> This secret must exist in **each namespace** that pulls from ghcr.io. If you have multiple services, create the secret in each service's namespace.
+
+### Step 2: Reference the Secret in Deployments
+
+Add `imagePullSecrets` to the pod spec in your deployment:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: example-service
+  namespace: example-service
+spec:
+  template:
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret      # references the secret created above
+      containers:
+        - name: example-service
+          image: ghcr.io/your-org/example-service:v1.0.0
+```
+
+### Step 3: Verify
+
+```bash
+# Check the secret exists in the namespace
+kubectl get secret ghcr-pull-secret -n example-service
+
+# Check pod events for image pull status
+kubectl describe pod -n example-service -l app.kubernetes.io/name=example-service
+```
+
+### Important Notes
+
+- The PAT used for image pulling can be different from the one used for ArgoCD git access
+- Image pull secrets are **not managed by ArgoCD** in this setup — they are created manually via `kubectl`
+- If the secret is deleted (e.g., namespace recreation), it must be recreated before pods can pull images
+- To avoid manual secret management, consider using a tool like [External Secrets Operator](https://external-secrets.io/) or adding the secret manifest to your service directory (sealed/encrypted)
+
 ## Troubleshooting
 
 ### ApplicationSets Not Created
@@ -380,6 +451,20 @@ Check ApplicationSet status:
 ```bash
 kubectl describe applicationset services -n argocd
 ```
+
+### Image Pull Errors (ErrImagePull / ImagePullBackOff)
+
+If pods show `ErrImagePull` or `ImagePullBackOff`:
+
+```bash
+# Check pod events for details
+kubectl describe pod -n <namespace> <pod-name>
+```
+
+Common causes:
+- **"denied"** — missing or invalid `imagePullSecrets`. Ensure the `ghcr-pull-secret` exists in the namespace and the PAT has `read:packages` scope
+- **"no matching manifest"** — the image tag doesn't exist for the node's architecture (e.g., `linux/arm64` vs `linux/amd64`)
+- **"not found"** — the image or tag doesn't exist in the registry
 
 ### Sync Issues
 
