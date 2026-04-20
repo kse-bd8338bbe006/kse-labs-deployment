@@ -1,0 +1,31 @@
+# Overrides for the upstream sighup/gatekeeper-policy-manager chart.
+# Installed via ArgoCD's infra ApplicationSet. Namespace is the directory
+# basename (gatekeeper-policy-manager) per the ApplicationSet template.
+#
+# GPM is a read-only UI that watches Gatekeeper CRDs cluster-wide, so it
+# does not need to live in the same namespace as Gatekeeper itself.
+
+gatekeeper-policy-manager:
+  replicaCount: 1
+
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    hosts:
+      - host: gpm.192.168.50.10.nip.io
+        paths:
+          - path: /
+            pathType: Prefix
+
+  config:
+    logLevel: info
+    # Flask session key. Lab-only value; rotate before any real-world exposure.
+    secretKey: "kse-labs-gpm-not-for-production-use-only"
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
