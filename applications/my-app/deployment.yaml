@@ -5,6 +5,8 @@ metadata:
   namespace: applications
   labels:
     app.kubernetes.io/name: my-app
+    # Required by Gatekeeper constraint deployments-must-have-owner-label.
+    owner: platform-team
 spec:
   replicas: 1
   selector:
