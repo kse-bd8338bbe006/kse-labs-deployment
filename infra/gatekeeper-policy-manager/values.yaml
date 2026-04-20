@@ -7,8 +7,9 @@ replicaCount: 1
 image:
   repository: quay.io/sighup/gatekeeper-policy-manager
   pullPolicy: IfNotPresent
-  # Overrides the image tag whose default is the chart appVersion.
-  tag: "v1.0.3"
+  # Chart 0.4.1 defaults to v1.0.3, which is amd64-only and fails with
+  # "exec format error" on our arm64 nodes. v1.1.1 is multi-arch.
+  tag: "v1.1.1"
 
 imagePullSecrets: []
 nameOverride: ""
