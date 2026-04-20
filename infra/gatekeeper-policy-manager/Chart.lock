@@ -1,6 +1,0 @@
-dependencies:
-- name: gatekeeper-policy-manager
-  repository: https://sighupio.github.io/gatekeeper-policy-manager
-  version: 0.4.1
-digest: sha256:14997f72083cca10d3396eb911b8e72aea35182c845585b26de2311be89ac42d
-generated: "2026-04-20T21:23:37.613192+03:00"
