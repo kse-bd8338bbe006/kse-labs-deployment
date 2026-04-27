@@ -1,12 +1,14 @@
 # ClusterIssuer that signs leaf certs by calling Vault's pki_int engine
-# (configured by infra/vault-pki/). The cert-manager pod authenticates
-# to Vault using its Kubernetes ServiceAccount token; the role
-# `cert-manager` (created by the vault-pki bootstrap Job) grants the
-# `pki-issuer` policy.
+# (configured by infra/vault-pki/).
 #
-# Sync-wave 10 so the cert-manager controller and CRDs in
-# cert-manager.yaml (default wave 0) are up before this ClusterIssuer
-# is applied.
+# Authenticates with a Vault token stored in the Secret
+# `cert-manager/vault-token`, which is itself bootstrapped by the
+# Job in cert-manager-vault-token.yaml (sync-wave 5). That Job mints
+# a child token from the root, scoped to the `pki-issuer` policy.
+#
+# Sync-wave 10 so the cert-manager controller, CRDs (in
+# cert-manager.yaml at wave 0), and the bootstrap Job (wave 5) all
+# finish before this ClusterIssuer is applied.
 #
 # Used by:
 #   * infra/image-policy-provider/ -- requests a TLS cert for the
@@ -23,8 +25,6 @@ spec:
     server: http://vault.vault.svc:8200
     path: pki_int/sign/cluster-services
     auth:
-      kubernetes:
-        role: cert-manager
-        mountPath: /v1/auth/kubernetes
-        serviceAccountRef:
-          name: cert-manager
+      tokenSecretRef:
+        name: vault-token
+        key: token
