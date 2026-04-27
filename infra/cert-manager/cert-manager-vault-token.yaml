@@ -147,11 +147,11 @@ spec:
       serviceAccountName: vault-token-bootstrap
       containers:
         - name: bootstrap
-          # rancher/kubectl tracks upstream Kubernetes patch releases
-          # and is anonymously pullable on Docker Hub. We previously
-          # used bitnami/kubectl:1.32, which Bitnami moved into a paid
-          # catalog on 2025-08-28 (Hub now returns 401 anonymously).
-          image: rancher/kubectl:v1.32.13
+          # alpine/k8s ships kubectl + a real shell on Alpine. We need
+          # /bin/sh for the bootstrap script's conditional logic.
+          # rancher/kubectl is distroless (no shell); bitnami/kubectl
+          # moved to a paid catalog on 2025-08-28.
+          image: alpine/k8s:1.32.13
           command: ["/bin/sh", "/scripts/bootstrap.sh"]
           volumeMounts:
             - name: script
