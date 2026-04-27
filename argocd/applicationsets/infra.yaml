@@ -33,7 +33,7 @@ spec:
           #   - `templates/*.yaml` containing `{{ ... }}` Helm syntax
           # Exclude both so the directory walker stays happy on plain
           # YAML apps like infra/gatekeeper-policies/.
-          exclude: "{**/*.json,**/templates/**}"
+          exclude: "{*.json,**/*.json,templates/*,templates/**,**/templates/*,**/templates/**}"
       destination:
         server: https://kubernetes.default.svc
         namespace: '{{path.basename}}'
