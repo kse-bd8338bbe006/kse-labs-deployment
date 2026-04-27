@@ -3,8 +3,9 @@
 # directory walker (which we restrict to non-template YAML) returns zero
 # files and ArgoCD refuses to sync ("would wipe out all resources").
 #
-# Setting `source.helm: {}` here forces ArgoCD into Helm mode for this
-# path, bypassing the directory walker entirely.
+# We split it out as a stand-alone Application that omits the
+# `directory:` field; ArgoCD auto-detects Chart.yaml and goes through
+# its Helm path, bypassing the directory walker entirely.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -16,7 +17,6 @@ spec:
     repoURL: https://github.com/kse-bd8338bbe006/kse-labs-deployment.git
     targetRevision: main
     path: infra/gatekeeper-policy-manager
-    helm: {}
   destination:
     server: https://kubernetes.default.svc
     namespace: gatekeeper-policy-manager
