@@ -74,6 +74,15 @@ spec:
                 # during bootstrap; the verifier will simply log
                 # "trust mode unset" until the ConfigMap arrives.
                 optional: true
+          env:
+            # cosign caches Rekor public keys under $HOME/.sigstore.
+            # readOnlyRootFilesystem=true makes the default home
+            # (/home/provider) immutable, so point HOME at a tmpfs
+            # mount we own. Same for $TMPDIR for any temp files.
+            - name: HOME
+              value: /tmp
+            - name: TMPDIR
+              value: /tmp
           volumeMounts:
             - name: tls
               mountPath: /etc/tls
@@ -81,6 +90,8 @@ spec:
             - name: cosign-key
               mountPath: /etc/cosign
               readOnly: true
+            - name: cache
+              mountPath: /tmp
           readinessProbe:
             httpGet:
               path: /healthz
@@ -114,6 +125,9 @@ spec:
         - name: cosign-key
           secret:
             secretName: image-policy-provider-cosign-key
+        - name: cache
+          emptyDir:
+            sizeLimit: 32Mi
 ---
 apiVersion: v1
 kind: Service
