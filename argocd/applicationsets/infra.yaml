@@ -10,6 +10,12 @@ spec:
         revision: main
         directories:
           - path: infra/*
+          # Pure Helm charts that have no top-level YAML for the directory
+          # walker to anchor on (their only manifests live under
+          # templates/, which we exclude below). They are managed as
+          # stand-alone Applications -- see argocd/applications/.
+          - path: infra/gatekeeper-policy-manager
+            exclude: true
   template:
     metadata:
       name: 'infra-{{path.basename}}'
