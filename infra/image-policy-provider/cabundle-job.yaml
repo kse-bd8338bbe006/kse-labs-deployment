@@ -134,7 +134,10 @@ spec:
       restartPolicy: OnFailure
       containers:
         - name: patcher
-          image: bitnami/kubectl:1.32
+          # rancher/kubectl tracks upstream Kubernetes patch releases
+          # and is anonymously pullable on Docker Hub (bitnami/kubectl
+          # moved to a paid catalog on 2025-08-28).
+          image: rancher/kubectl:v1.32.13
           command: ["/bin/sh", "/scripts/patch.sh"]
           volumeMounts:
             - name: script
