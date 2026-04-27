@@ -1,13 +1,21 @@
-# Patches the Provider CRD's spec.caBundle with the CA cert from the
-# cert-manager-issued Secret.
+# Creates (or refreshes) the Gatekeeper Provider CRD with the CA cert
+# from the cert-manager-issued Secret already mounted at the Provider
+# Service.
 #
-# The Provider CRD schema requires caBundle to be set (PEM, base64-
-# encoded) so Gatekeeper trusts the provider's TLS server cert. Vault's
-# intermediate CA changes whenever someone re-bootstraps the PKI, so we
-# read it dynamically rather than committing a static value.
+# Why a Job and not a static manifest:
+#   Gatekeeper's validating webhook rejects a Provider with an empty
+#   `spec.caBundle` when `spec.url` is HTTPS, so we cannot ship a
+#   placeholder and patch later. Vault's intermediate CA also rotates
+#   whenever someone re-bootstraps the PKI, so a static base64 blob
+#   would drift. Both problems disappear if the resource is rendered at
+#   sync time from the live Secret.
 #
-# Sync-wave 35: runs after Provider (30), Certificate (20), and the
-# Deployment (25). Idempotent -- if caBundle already matches, no patch.
+# Sync-waves:
+#   ServiceAccount / Roles / ConfigMap -- wave 30 (after cert + deploy)
+#   Job                                -- wave 35 (Sync hook, idempotent)
+#
+# Idempotent: re-runs are no-ops when the Provider already carries the
+# correct caBundle.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -55,7 +63,12 @@ rules:
   - apiGroups: ["externaldata.gatekeeper.sh"]
     resources: ["providers"]
     resourceNames: ["image-policy-provider"]
-    verbs: ["get", "patch"]
+    verbs: ["get", "create", "update", "patch"]
+  # We `kubectl apply -f -` for create-or-update; the apply path
+  # consults the resource list, so allow `list` without resourceNames.
+  - apiGroups: ["externaldata.gatekeeper.sh"]
+    resources: ["providers"]
+    verbs: ["list"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -84,10 +97,10 @@ data:
     #!/bin/sh
     set -eu
 
-    # Wait for cert-manager to issue the TLS secret with a populated
-    # ca.crt key. cert-manager creates the secret eagerly but writes
-    # ca.crt only after Vault returns the signed leaf, so a short loop
-    # is enough.
+    # Wait for cert-manager to populate ca.crt in the issued Secret.
+    # The Secret resource exists immediately, but ca.crt only appears
+    # once Vault returns the signed leaf, so a short retry loop is
+    # enough on a cold start.
     for i in $(seq 1 60); do
       CA_B64=$(kubectl get secret -n image-policy-provider \
         image-policy-provider-tls \
@@ -103,18 +116,16 @@ data:
       exit 1
     fi
 
-    CURRENT=$(kubectl get provider.externaldata.gatekeeper.sh \
-      image-policy-provider -o jsonpath='{.spec.caBundle}' || echo "")
-    if [ "$CURRENT" = "$CA_B64" ]; then
-      echo "caBundle already matches; nothing to do."
-      exit 0
-    fi
-
-    echo "patching Provider/image-policy-provider caBundle..."
-    kubectl patch provider.externaldata.gatekeeper.sh \
-      image-policy-provider \
-      --type=merge \
-      -p "{\"spec\":{\"caBundle\":\"${CA_B64}\"}}"
+    cat <<EOF | kubectl apply -f -
+    apiVersion: externaldata.gatekeeper.sh/v1beta1
+    kind: Provider
+    metadata:
+      name: image-policy-provider
+    spec:
+      url: https://image-policy-provider.image-policy-provider.svc:443/validate
+      timeout: 10
+      caBundle: ${CA_B64}
+    EOF
 ---
 apiVersion: batch/v1
 kind: Job
