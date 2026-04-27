@@ -60,15 +60,17 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "30"
 rules:
+  # `create` and `list` cannot be restricted by `resourceNames` -- the
+  # API server evaluates that filter only after the request payload is
+  # decoded, so RBAC has to allow these verbs cluster-wide on the
+  # resource. We narrow get/update/patch to the single name.
+  - apiGroups: ["externaldata.gatekeeper.sh"]
+    resources: ["providers"]
+    verbs: ["create", "list"]
   - apiGroups: ["externaldata.gatekeeper.sh"]
     resources: ["providers"]
     resourceNames: ["image-policy-provider"]
-    verbs: ["get", "create", "update", "patch"]
-  # We `kubectl apply -f -` for create-or-update; the apply path
-  # consults the resource list, so allow `list` without resourceNames.
-  - apiGroups: ["externaldata.gatekeeper.sh"]
-    resources: ["providers"]
-    verbs: ["list"]
+    verbs: ["get", "update", "patch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
