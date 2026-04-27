@@ -43,6 +43,11 @@ spec:
         app.kubernetes.io/name: image-policy-provider
     spec:
       automountServiceAccountToken: false
+      # The provider image is a private GHCR package. The Secret is
+      # populated by the ExternalSecret in external-secret.yaml from
+      # secret/github/ghcr-pull-secret in Vault.
+      imagePullSecrets:
+        - name: ghcr-pull-secret
       securityContext:
         runAsNonRoot: true
         runAsUser: 65532
