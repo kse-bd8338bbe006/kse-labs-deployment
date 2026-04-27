@@ -1,0 +1,32 @@
+{{- /*
+KSE custom addition (not from upstream chart).
+
+ClusterIssuer that signs leaf certs by calling Vault's PKI engine
+(configured by infra/vault-pki/). The cert-manager pod authenticates
+to Vault using its Kubernetes ServiceAccount token; the role
+`cert-manager` (created by the vault-pki bootstrap Job) grants the
+`pki-issuer` policy.
+
+Sync-wave 5 so the chart's controller and Custom Resource Definitions
+are up before this ClusterIssuer is applied.
+
+Used by:
+  * infra/image-policy-provider/ -- requests a TLS cert for the
+    OPA Gatekeeper external-data provider service.
+*/ -}}
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: vault-pki-int
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+spec:
+  vault:
+    server: http://vault.vault.svc:8200
+    path: pki_int/sign/cluster-services
+    auth:
+      kubernetes:
+        role: cert-manager
+        mountPath: /v1/auth/kubernetes
+        serviceAccountRef:
+          name: cert-manager
