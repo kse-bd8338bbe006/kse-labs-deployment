@@ -83,6 +83,11 @@ spec:
               value: /tmp
             - name: TMPDIR
               value: /tmp
+            # Make cosign authenticate to private registries (GHCR
+            # for our own images) using the same Vault-backed PAT
+            # that the kubelet uses for image pulls.
+            - name: DOCKER_CONFIG
+              value: /etc/docker
           volumeMounts:
             - name: tls
               mountPath: /etc/tls
@@ -92,6 +97,9 @@ spec:
               readOnly: true
             - name: cache
               mountPath: /tmp
+            - name: docker-config
+              mountPath: /etc/docker
+              readOnly: true
           readinessProbe:
             httpGet:
               path: /healthz
@@ -128,6 +136,17 @@ spec:
         - name: cache
           emptyDir:
             sizeLimit: 32Mi
+        # The kubernetes.io/dockerconfigjson Secret stores its
+        # creds in a key called `.dockerconfigjson`. cosign reads
+        # `$DOCKER_CONFIG/config.json`. Project the secret key onto
+        # that filename so cosign and the kubelet share one source
+        # of truth (the Vault-backed PAT).
+        - name: docker-config
+          secret:
+            secretName: ghcr-pull-secret
+            items:
+              - key: .dockerconfigjson
+                path: config.json
 ---
 apiVersion: v1
 kind: Service
