@@ -1,0 +1,154 @@
+# Patches the Provider CRD's spec.caBundle with the CA cert from the
+# cert-manager-issued Secret.
+#
+# The Provider CRD schema requires caBundle to be set (PEM, base64-
+# encoded) so Gatekeeper trusts the provider's TLS server cert. Vault's
+# intermediate CA changes whenever someone re-bootstraps the PKI, so we
+# read it dynamically rather than committing a static value.
+#
+# Sync-wave 35: runs after Provider (30), Certificate (20), and the
+# Deployment (25). Idempotent -- if caBundle already matches, no patch.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: provider-cabundle-patcher
+  namespace: image-policy-provider
+  annotations:
+    argocd.argoproj.io/sync-wave: "30"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: provider-cabundle-patcher
+  namespace: image-policy-provider
+  annotations:
+    argocd.argoproj.io/sync-wave: "30"
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["image-policy-provider-tls"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: provider-cabundle-patcher
+  namespace: image-policy-provider
+  annotations:
+    argocd.argoproj.io/sync-wave: "30"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: provider-cabundle-patcher
+subjects:
+  - kind: ServiceAccount
+    name: provider-cabundle-patcher
+    namespace: image-policy-provider
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: provider-cabundle-patcher
+  annotations:
+    argocd.argoproj.io/sync-wave: "30"
+rules:
+  - apiGroups: ["externaldata.gatekeeper.sh"]
+    resources: ["providers"]
+    resourceNames: ["image-policy-provider"]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: provider-cabundle-patcher
+  annotations:
+    argocd.argoproj.io/sync-wave: "30"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: provider-cabundle-patcher
+subjects:
+  - kind: ServiceAccount
+    name: provider-cabundle-patcher
+    namespace: image-policy-provider
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: provider-cabundle-patcher-script
+  namespace: image-policy-provider
+  annotations:
+    argocd.argoproj.io/sync-wave: "30"
+data:
+  patch.sh: |
+    #!/bin/sh
+    set -eu
+
+    # Wait for cert-manager to issue the TLS secret with a populated
+    # ca.crt key. cert-manager creates the secret eagerly but writes
+    # ca.crt only after Vault returns the signed leaf, so a short loop
+    # is enough.
+    for i in $(seq 1 60); do
+      CA_B64=$(kubectl get secret -n image-policy-provider \
+        image-policy-provider-tls \
+        -o jsonpath='{.data.ca\.crt}' 2>/dev/null || true)
+      if [ -n "$CA_B64" ]; then
+        break
+      fi
+      echo "waiting for cert-manager to populate ca.crt ($i/60)..."
+      sleep 5
+    done
+    if [ -z "$CA_B64" ]; then
+      echo "ca.crt never appeared in image-policy-provider-tls Secret" >&2
+      exit 1
+    fi
+
+    CURRENT=$(kubectl get provider.externaldata.gatekeeper.sh \
+      image-policy-provider -o jsonpath='{.spec.caBundle}' || echo "")
+    if [ "$CURRENT" = "$CA_B64" ]; then
+      echo "caBundle already matches; nothing to do."
+      exit 0
+    fi
+
+    echo "patching Provider/image-policy-provider caBundle..."
+    kubectl patch provider.externaldata.gatekeeper.sh \
+      image-policy-provider \
+      --type=merge \
+      -p "{\"spec\":{\"caBundle\":\"${CA_B64}\"}}"
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: provider-cabundle-patcher
+  namespace: image-policy-provider
+  annotations:
+    argocd.argoproj.io/sync-wave: "35"
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 5
+  ttlSecondsAfterFinished: 600
+  template:
+    spec:
+      serviceAccountName: provider-cabundle-patcher
+      restartPolicy: OnFailure
+      containers:
+        - name: patcher
+          image: bitnami/kubectl:1.32
+          command: ["/bin/sh", "/scripts/patch.sh"]
+          volumeMounts:
+            - name: script
+              mountPath: /scripts
+              readOnly: true
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+      volumes:
+        - name: script
+          configMap:
+            name: provider-cabundle-patcher-script
+            defaultMode: 0555
