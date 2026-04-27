@@ -10,13 +10,6 @@ spec:
         revision: main
         directories:
           - path: applications/*
-          # image-policy-provider-config lives under applications/ so
-          # students see and own it on the user-application side, but
-          # it deploys into the image-policy-provider namespace, not
-          # `applications`. Managed as a stand-alone Application with
-          # selfHeal: false (see argocd/applications/).
-          - path: applications/image-policy-provider-config
-            exclude: true
   template:
     metadata:
       name: 'svc-{{path.basename}}'

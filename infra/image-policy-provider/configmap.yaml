@@ -1,24 +1,23 @@
-# Student-editable runtime configuration for the image-policy-provider.
+# Runtime configuration for the image-policy-provider Cosign verifier.
 #
-# The provider Deployment in infra/image-policy-provider/deployment.yaml
-# reads this ConfigMap via `envFrom`. Edit values here (or
+# The provider Deployment (deployment.yaml) reads this ConfigMap via
+# `envFrom`. Edit values here (or
 # `kubectl edit configmap -n image-policy-provider image-policy-provider-config`)
 # to change which images the verifier accepts and which signer it
 # trusts -- no provider rebuild needed, just `kubectl rollout restart
 # deploy/image-policy-provider` afterwards.
 #
-# Lives in `applications/` (not `infra/`) on purpose: students touch
-# this; the surrounding infra (cert-manager, Vault, the Deployment
-# itself) is owned by ops and rarely changes.
+# Note: this Application has ArgoCD `selfHeal: true` like the rest of
+# infra. Live `kubectl edit` works for short experiments, but ArgoCD
+# will reconcile back to the values committed here within a few minutes.
+# For persistent changes, edit this file in git.
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: image-policy-provider-config
   namespace: image-policy-provider
   annotations:
-    # Stand-alone Application has selfHeal: false; this comment is a
-    # second reminder that kubectl edits will NOT be reverted.
-    description: "Student-editable runtime config for the Cosign verifier."
+    description: "Runtime config for the Cosign verifier (ALLOWED_REGISTRIES, COSIGN_*, LOG_*)."
 data:
   # Comma-separated repo prefixes the verifier will accept. The image
   # itself must be pinned by digest (repo@sha256:<64hex>); the prefix

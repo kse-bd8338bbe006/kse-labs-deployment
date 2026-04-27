@@ -61,12 +61,12 @@ spec:
             - name: https
               containerPort: 8443
           # Runtime configuration -- allowed registries, Cosign trust
-          # material, log level, body dumps -- comes from a ConfigMap
-          # under applications/image-policy-provider-config/. Editing
-          # that ConfigMap (or `kubectl edit configmap -n
-          # image-policy-provider image-policy-provider-config`) and
-          # rolling out the Deployment is the supported way to tweak
-          # provider behavior; the Deployment itself is owned by ops.
+          # material, log level, body dumps -- lives in configmap.yaml
+          # alongside this manifest. Editing it (or `kubectl edit
+          # configmap -n image-policy-provider image-policy-provider-config`)
+          # and rolling out the Deployment is the supported way to
+          # tweak provider behavior; the Deployment itself rarely
+          # changes.
           envFrom:
             - configMapRef:
                 name: image-policy-provider-config
