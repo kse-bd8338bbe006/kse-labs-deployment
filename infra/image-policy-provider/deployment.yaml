@@ -60,13 +60,20 @@ spec:
           ports:
             - name: https
               containerPort: 8443
-          env:
-            - name: ALLOWED_REGISTRIES
-              value: "ghcr.io/kse-bd8338bbe006"
-            - name: COSIGN_KEY_PATH
-              value: /etc/cosign/cosign.pub
-            - name: LOG_LEVEL
-              value: INFO
+          # Runtime configuration -- allowed registries, Cosign trust
+          # material, log level, body dumps -- comes from a ConfigMap
+          # under applications/image-policy-provider-config/. Editing
+          # that ConfigMap (or `kubectl edit configmap -n
+          # image-policy-provider image-policy-provider-config`) and
+          # rolling out the Deployment is the supported way to tweak
+          # provider behavior; the Deployment itself is owned by ops.
+          envFrom:
+            - configMapRef:
+                name: image-policy-provider-config
+                # optional: don't crash if the config is briefly absent
+                # during bootstrap; the verifier will simply log
+                # "trust mode unset" until the ConfigMap arrives.
+                optional: true
           volumeMounts:
             - name: tls
               mountPath: /etc/tls

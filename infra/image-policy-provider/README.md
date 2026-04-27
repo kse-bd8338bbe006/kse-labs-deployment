@@ -9,7 +9,7 @@ container image signatures with Cosign.
 | File | What it creates |
 | --- | --- |
 | `certificate.yaml` | `Certificate` (cert-manager) issued by the in-cluster Vault PKI `ClusterIssuer`. cert-manager writes the keypair + chain into the `image-policy-provider-tls` Secret. |
-| `deployment.yaml` | The Cosign public-key Secret (lab placeholder), the `Deployment` running the FastAPI service on `:8443` with TLS terminated by uvicorn, and the `Service` exposing port `443`. |
+| `deployment.yaml` | The Cosign public-key Secret (lab placeholder), the `Deployment` running the FastAPI service on `:8443` with TLS terminated by uvicorn, and the `Service` exposing port `443`. The Deployment reads its runtime env via `envFrom` from the `image-policy-provider-config` ConfigMap, owned by [`applications/image-policy-provider-config/`](../../applications/image-policy-provider-config/). |
 | `cabundle-job.yaml` | RBAC + a `Job` that reads `ca.crt` from the cert-manager Secret and `kubectl apply`s the Gatekeeper `Provider` CRD with the correct `caBundle`. The Provider is not committed as a static manifest because Gatekeeper's webhook rejects an empty `caBundle` and the CA rotates whenever Vault's PKI is re-bootstrapped. |
 | `external-secret.yaml` | `ExternalSecret` that materializes the GHCR pull credential from Vault (`secret/github/ghcr-pull-secret`) into a `kubernetes.io/dockerconfigjson` Secret in this namespace. The Deployment references it via `imagePullSecrets`. |
 
