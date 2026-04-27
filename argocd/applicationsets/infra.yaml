@@ -25,8 +25,15 @@ spec:
           # Recurse through subdirectories so apps can organize their
           # YAMLs into per-topic folders (e.g. gatekeeper-policies
           # groups related files into read-only-root-fs/, etc.).
-          # Helm chart apps ignore this field.
           recurse: true
+          # Helm-charted apps (Chart.yaml present) still get Helm-rendered
+          # by ArgoCD, but as of v2.13 the directory walker also scans
+          # the same path and chokes on:
+          #   - raw `*.json` files used by .Files.Get (Grafana dashboards)
+          #   - `templates/*.yaml` containing `{{ ... }}` Helm syntax
+          # Exclude both so the directory walker stays happy on plain
+          # YAML apps like infra/gatekeeper-policies/.
+          exclude: "{**/*.json,**/templates/**}"
       destination:
         server: https://kubernetes.default.svc
         namespace: '{{path.basename}}'
