@@ -10,10 +10,12 @@ spec:
         revision: main
         directories:
           - path: infra/*
-          # Pure Helm charts that have no top-level YAML for the directory
-          # walker to anchor on (their only manifests live under
-          # templates/, which we exclude below). They are managed as
+          # Helm-charted infra apps. Their manifests live under
+          # templates/ (which we'd otherwise have to scan, and that
+          # breaks the directory walker). They are managed as
           # stand-alone Applications -- see argocd/applications/.
+          - path: infra/gatekeeper
+            exclude: true
           - path: infra/gatekeeper-policy-manager
             exclude: true
   template:
@@ -31,15 +33,8 @@ spec:
           # Recurse through subdirectories so apps can organize their
           # YAMLs into per-topic folders (e.g. gatekeeper-policies
           # groups related files into read-only-root-fs/, etc.).
+          # Helm-charted apps live under argocd/applications/ instead.
           recurse: true
-          # Helm-charted apps (Chart.yaml present) still get Helm-rendered
-          # by ArgoCD, but as of v2.13 the directory walker also scans
-          # the same path and chokes on:
-          #   - raw `*.json` files used by .Files.Get (Grafana dashboards)
-          #   - `templates/*.yaml` containing `{{ ... }}` Helm syntax
-          # Exclude both so the directory walker stays happy on plain
-          # YAML apps like infra/gatekeeper-policies/.
-          exclude: "{*.json,**/*.json,templates/*,templates/**,**/templates/*,**/templates/**}"
       destination:
         server: https://kubernetes.default.svc
         namespace: '{{path.basename}}'
