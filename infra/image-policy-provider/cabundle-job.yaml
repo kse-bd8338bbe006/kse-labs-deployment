@@ -32,10 +32,21 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "30"
 rules:
+  # Read cert-manager's issued Secret for our own CA bundle.
   - apiGroups: [""]
     resources: ["secrets"]
     resourceNames: ["image-policy-provider-tls"]
     verbs: ["get"]
+  # Manage the gatekeeper-ca Secret we mirror into this namespace.
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["gatekeeper-ca"]
+    verbs: ["get", "create", "update", "patch"]
+  # `create` cannot be filtered by resourceNames; allow it broadly
+  # within this namespace only.
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -48,6 +59,38 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: provider-cabundle-patcher
+subjects:
+  - kind: ServiceAccount
+    name: provider-cabundle-patcher
+    namespace: image-policy-provider
+---
+# Cross-namespace read of Gatekeeper's webhook server cert. Same
+# Secret holds the cert AND its CA chain; we only need the CA so our
+# provider can verify Gatekeeper's client certificate during mTLS.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: read-gatekeeper-webhook-cert
+  namespace: gatekeeper
+  annotations:
+    argocd.argoproj.io/sync-wave: "30"
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["gatekeeper-webhook-server-cert"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: provider-cabundle-patcher-reads-gk
+  namespace: gatekeeper
+  annotations:
+    argocd.argoproj.io/sync-wave: "30"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: read-gatekeeper-webhook-cert
 subjects:
   - kind: ServiceAccount
     name: provider-cabundle-patcher
@@ -99,10 +142,10 @@ data:
     #!/bin/sh
     set -eu
 
-    # Wait for cert-manager to populate ca.crt in the issued Secret.
-    # The Secret resource exists immediately, but ca.crt only appears
-    # once Vault returns the signed leaf, so a short retry loop is
-    # enough on a cold start.
+    # ----- 1. Wait for cert-manager to populate our own CA bundle -----
+    # The cert-manager Certificate creates the Secret immediately, but
+    # ca.crt only appears once Vault returns the signed leaf, so a
+    # short retry loop is enough on a cold start.
     for i in $(seq 1 60); do
       CA_B64=$(kubectl get secret -n image-policy-provider \
         image-policy-provider-tls \
@@ -118,6 +161,7 @@ data:
       exit 1
     fi
 
+    # ----- 2. Render the Gatekeeper Provider CRD with that CA -----
     cat <<EOF | kubectl apply -f -
     apiVersion: externaldata.gatekeeper.sh/v1beta1
     kind: Provider
@@ -128,6 +172,39 @@ data:
       timeout: 10
       caBundle: ${CA_B64}
     EOF
+
+    # ----- 3. Mirror Gatekeeper's webhook CA into our namespace -----
+    # This is what enables mTLS at the provider: the entrypoint reads
+    # GATEKEEPER_CA_CERT_FILE and, if present, configures uvicorn with
+    # ssl_cert_reqs=REQUIRED + ssl_ca_certs=<this CA>. The Secret in
+    # the gatekeeper namespace contains tls.crt/tls.key/ca.crt; we
+    # only need ca.crt -- chain that signed Gatekeeper's webhook cert
+    # is also what signs its outbound client cert.
+    GK_CA_B64=$(kubectl get secret -n gatekeeper \
+      gatekeeper-webhook-server-cert \
+      -o jsonpath='{.data.ca\.crt}' 2>/dev/null || true)
+    if [ -z "$GK_CA_B64" ]; then
+      # Older Gatekeeper builds put the CA only inside tls.crt
+      # (self-signed); fall back to that.
+      GK_CA_B64=$(kubectl get secret -n gatekeeper \
+        gatekeeper-webhook-server-cert \
+        -o jsonpath='{.data.tls\.crt}' 2>/dev/null || true)
+    fi
+    if [ -z "$GK_CA_B64" ]; then
+      echo "could not read Gatekeeper's webhook CA (skipping mTLS bootstrap)"
+    else
+      cat <<EOF | kubectl apply -f -
+    apiVersion: v1
+    kind: Secret
+    metadata:
+      name: gatekeeper-ca
+      namespace: image-policy-provider
+    type: Opaque
+    data:
+      ca.crt: ${GK_CA_B64}
+    EOF
+      echo "gatekeeper-ca Secret refreshed."
+    fi
 ---
 apiVersion: batch/v1
 kind: Job

@@ -88,6 +88,15 @@ spec:
             # that the kubelet uses for image pulls.
             - name: DOCKER_CONFIG
               value: /etc/docker
+            # When this file exists, the provider's start.py turns on
+            # mTLS: only TLS clients whose cert chains to Gatekeeper's
+            # webhook CA can hit /validate. The Secret it points at is
+            # populated by the cabundle Job (see cabundle-job.yaml,
+            # mirrors gatekeeper/gatekeeper-webhook-server-cert).
+            # Optional -- the entrypoint falls back to one-way TLS if
+            # the file is missing, so the lab survives a cold cluster.
+            - name: GATEKEEPER_CA_CERT_FILE
+              value: /etc/gatekeeper-ca/ca.crt
           volumeMounts:
             - name: tls
               mountPath: /etc/tls
@@ -100,9 +109,16 @@ spec:
             - name: docker-config
               mountPath: /etc/docker
               readOnly: true
+            - name: gatekeeper-ca
+              mountPath: /etc/gatekeeper-ca
+              readOnly: true
+          # /readyz returns 503 until cosign is on PATH AND a trust
+          # mode is configured; protects us from sending traffic to a
+          # half-configured pod. /healthz stays as the liveness probe
+          # because the process is up regardless of trust material.
           readinessProbe:
             httpGet:
-              path: /healthz
+              path: /readyz
               port: https
               scheme: HTTPS
             initialDelaySeconds: 3
@@ -141,6 +157,15 @@ spec:
         # `$DOCKER_CONFIG/config.json`. Project the secret key onto
         # that filename so cosign and the kubelet share one source
         # of truth (the Vault-backed PAT).
+        # Gatekeeper's CA, mirrored into this namespace by the
+        # cabundle Job (see cabundle-job.yaml). `optional: true`
+        # so the pod still boots if the Secret hasn't been
+        # populated yet -- the entrypoint falls back to one-way
+        # TLS in that case.
+        - name: gatekeeper-ca
+          secret:
+            secretName: gatekeeper-ca
+            optional: true
         - name: docker-config
           secret:
             secretName: ghcr-pull-secret
