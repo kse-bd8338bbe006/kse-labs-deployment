@@ -19,10 +19,13 @@ metadata:
   annotations:
     description: "Runtime config for the Cosign verifier (ALLOWED_REGISTRIES, COSIGN_*, LOG_*)."
 data:
-  # Comma-separated repo prefixes the verifier will accept. The image
-  # itself must be pinned by digest (repo@sha256:<64hex>); the prefix
-  # is matched against the repo portion before the @.
-  ALLOWED_REGISTRIES: "ghcr.io/kse-bd8338bbe006"
+  # Optional layer-1 registry allowlist. Comma-separated repo
+  # prefixes the verifier will accept BEFORE running cosign. Leave
+  # unset (or empty) to make Cosign signature verification the only
+  # gate -- which is the lab default so students see the actual
+  # 'no matching signatures' message rather than a misleading
+  # 'registry not allowed' short-circuit.
+  # ALLOWED_REGISTRIES: "ghcr.io/kse-bd8338bbe006"
 
   # ---- Trust mode 1: key-based ----
   # Path to a Cosign public key inside the container. Defaults to the
