@@ -14,7 +14,13 @@ metadata:
     argocd.argoproj.io/sync-wave: "1"
     argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
 spec:
-  enforcementAction: dryrun
+  # Enforced in the `applications` namespace -- any Pod whose image
+  # the provider can't verify (registry-allowlist miss OR cosign
+  # rejection) is refused at admission. The match.namespaces below
+  # scopes the deny to just `applications`; everything else
+  # (kube-system, vault, gatekeeper, image-policy-provider, ...)
+  # bypasses this constraint entirely.
+  enforcementAction: deny
   match:
     kinds:
       - apiGroups: [""]
