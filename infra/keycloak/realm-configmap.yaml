@@ -50,6 +50,27 @@ data:
           "protocol": "openid-connect"
         },
         {
+          "clientId": "dpop-practice",
+          "name": "DPoP practice client (Lecture 8)",
+          "enabled": true,
+          "publicClient": false,
+          "standardFlowEnabled": true,
+          "directAccessGrantsEnabled": true,
+          "serviceAccountsEnabled": true,
+          "secret": "dpop-practice-secret-lab-2026",
+          "redirectUris": [
+            "http://localhost:8080/*",
+            "http://127.0.0.1/*"
+          ],
+          "webOrigins": [
+            "http://localhost:8080"
+          ],
+          "attributes": {
+            "dpop.bound.access.tokens": "true"
+          },
+          "protocol": "openid-connect"
+        },
+        {
           "clientId": "documents-api",
           "name": "Documents API (Lecture 6 resource server)",
           "enabled": true,
