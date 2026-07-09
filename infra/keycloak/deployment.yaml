@@ -38,6 +38,9 @@ spec:
             - --health-enabled=true
             - --spi-x509cert-lookup-provider=nginx
             - --spi-x509cert-lookup-nginx-ssl-client-cert=ssl-client-cert
+            # Trust the lab's own Root CA on outbound TLS (SAML metadata import,
+            # OIDC brokering, SMTP). ca.crt is this cluster's root, injected below.
+            - --truststore-paths=/opt/keycloak/conf/truststores
           env:
             - name: DB_HOST
               value: "192.168.50.10"
@@ -76,6 +79,9 @@ spec:
               readOnly: true
             - name: tmp
               mountPath: /tmp
+            - name: lab-truststore
+              mountPath: /opt/keycloak/conf/truststores
+              readOnly: true
           resources:
             requests:
               cpu: 500m
@@ -103,3 +109,12 @@ spec:
           emptyDir:
             medium: Memory
             sizeLimit: 128Mi
+        # Root CA that cert-manager publishes into keycloak-tls (ca.crt). Each
+        # student's cluster injects its OWN root here - nothing is hardcoded.
+        # Only the ca.crt key is mounted, so the leaf private key stays out.
+        - name: lab-truststore
+          secret:
+            secretName: keycloak-tls
+            items:
+              - key: ca.crt
+                path: lab-root-ca.pem
