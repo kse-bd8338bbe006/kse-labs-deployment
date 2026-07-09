@@ -1,0 +1,65 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: authentik
+  namespace: argocd
+spec:
+  project: infra
+  # Authentik ships as a Helm chart with a vendored PostgreSQL subchart (no Redis
+  # needed since 2024.x). Standalone Application because the infra ApplicationSet's
+  # directory generator can't consume a remote Helm chart.
+  source:
+    repoURL: https://charts.goauthentik.io
+    chart: authentik
+    targetRevision: 2026.5.4
+    helm:
+      releaseName: authentik
+      values: |
+        # Bootstrap admin (akadmin) + an API token for scripted config.
+        # Lab values (well-known, like the other lab secrets) - not real creds.
+        global:
+          env:
+            - name: AUTHENTIK_BOOTSTRAP_PASSWORD
+              value: "akadmin-lab-2026"
+            - name: AUTHENTIK_BOOTSTRAP_TOKEN
+              value: "authentik-bootstrap-token-lab-2026"
+            - name: AUTHENTIK_BOOTSTRAP_EMAIL
+              value: "akadmin@lab.local"
+        authentik:
+          secret_key: "9o90k07p/uEZvM+Q+gv3BE1tNBu8QKVlraTKlFxJUhtpzu3+swKBrjhiT8o8WvNK0ds="
+          error_reporting:
+            enabled: false
+          postgresql:
+            password: "authentik-db-lab-2026"
+        # Bundled PostgreSQL (official postgres image, vendored subchart).
+        postgresql:
+          enabled: true
+          auth:
+            password: "authentik-db-lab-2026"
+          primary:
+            persistence:
+              enabled: true
+              storageClass: nfs-client
+              size: 2Gi
+        server:
+          ingress:
+            enabled: true
+            ingressClassName: nginx
+            annotations:
+              cert-manager.io/cluster-issuer: vault-pki-int
+            hosts:
+              - authentik.192.168.50.10.nip.io
+            tls:
+              - secretName: authentik-tls
+                hosts:
+                  - authentik.192.168.50.10.nip.io
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: authentik
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
