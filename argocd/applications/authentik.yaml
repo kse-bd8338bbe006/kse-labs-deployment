@@ -5,9 +5,10 @@ metadata:
   namespace: argocd
 spec:
   project: infra
-  # Authentik ships as a Helm chart with a vendored PostgreSQL subchart (no Redis
-  # needed since 2024.x). Standalone Application because the infra ApplicationSet's
-  # directory generator can't consume a remote Helm chart.
+  # Authentik ships as a Helm chart (no Redis needed since 2024.x). We reuse the
+  # shared lab PostgreSQL on the haproxy VM (192.168.50.10:5432) rather than the
+  # chart's bundled DB - the lab's worker VMs are small, and Keycloak already uses
+  # that Postgres. The `authentik` DB + role must exist there (see the practice doc).
   source:
     repoURL: https://charts.goauthentik.io
     chart: authentik
@@ -29,18 +30,16 @@ spec:
           secret_key: "9o90k07p/uEZvM+Q+gv3BE1tNBu8QKVlraTKlFxJUhtpzu3+swKBrjhiT8o8WvNK0ds="
           error_reporting:
             enabled: false
+          # Reuse the shared lab Postgres (haproxy VM). DB + role created manually.
           postgresql:
+            host: "192.168.50.10"
+            port: 5432
+            name: "authentik"
+            user: "authentik"
             password: "authentik-db-lab-2026"
-        # Bundled PostgreSQL (official postgres image, vendored subchart).
+        # Bundled PostgreSQL disabled - using the external shared instance above.
         postgresql:
-          enabled: true
-          auth:
-            password: "authentik-db-lab-2026"
-          primary:
-            persistence:
-              enabled: true
-              storageClass: nfs-client
-              size: 2Gi
+          enabled: false
         server:
           ingress:
             enabled: true
