@@ -30,3 +30,9 @@ spec:
       kind: ExternalSecret
     - group: ''
       kind: LimitRange
+    # vuln-api (Lecture 10) ships a ServiceMonitor so kube-prometheus-stack scrapes
+    # its /metrics, and the practice adds a PrometheusRule for attack alerts.
+    - group: monitoring.coreos.com
+      kind: ServiceMonitor
+    - group: monitoring.coreos.com
+      kind: PrometheusRule
