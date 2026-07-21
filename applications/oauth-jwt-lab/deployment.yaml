@@ -26,7 +26,7 @@ spec:
       containers:
         - name: oauth-jwt-lab
           # CI (oauth-jwt-lab repo) builds this tag; bump it to redeploy a new build.
-          image: ghcr.io/kse-bd8338bbe006/oauth-jwt-lab:8c0cc17398340cbc8a260e7158d329e8f9d39076
+          image: ghcr.io/kse-bd8338bbe006/oauth-jwt-lab:0736c277ae34b88077c424f1be7f7345b22dd858
           ports:
             - name: http
               containerPort: 8000
