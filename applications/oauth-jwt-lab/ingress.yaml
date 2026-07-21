@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: oauth-jwt-lab
+  namespace: applications
+  annotations:
+    cert-manager.io/cluster-issuer: vault-pki-int
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - oauth-jwt-lab.192.168.50.10.nip.io
+      secretName: oauth-jwt-lab-tls
+  rules:
+    - host: oauth-jwt-lab.192.168.50.10.nip.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: oauth-jwt-lab
+                port:
+                  number: 80

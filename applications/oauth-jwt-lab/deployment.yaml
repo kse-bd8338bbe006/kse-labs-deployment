@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oauth-jwt-lab
+  namespace: applications
+  labels:
+    app.kubernetes.io/name: oauth-jwt-lab
+    owner: platform-team
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: oauth-jwt-lab
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: oauth-jwt-lab
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: oauth-jwt-lab
+          # CI (oauth-jwt-lab repo) builds this tag; bump it to redeploy a new build.
+          image: ghcr.io/kse-bd8338bbe006/oauth-jwt-lab:8c0cc17398340cbc8a260e7158d329e8f9d39076
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          env:
+            # false = vulnerable (default). Students flip this to "true" to apply the fixes
+            # (pinned JWT alg + strong key, and the object-level owner check).
+            - name: SECURE_MODE
+              value: "false"
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              cpu: "1"
+              memory: 192Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 32Mi
